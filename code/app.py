@@ -140,8 +140,13 @@ def assign_tracts(_crime_df, _tracts_gdf):
 
 # ── Load all data ──────────────────────────────
 crime_raw   = load_crime()
-acs         = load_acs()
+acs_all     = load_acs()
 tracts_chi  = load_tracts()
+
+# ── Filter ACS to Chicago tracts only ──────────
+chi_tract_ids = set(tracts_chi["GEOID"].astype(str).str.zfill(11))
+acs = acs_all[acs_all["tract_id"].isin(chi_tract_ids)].copy()
+
 crime_tract = assign_tracts(crime_raw, tracts_chi)
 
 available_years = sorted(crime_tract["Year"].dropna().unique().astype(int), reverse=True)
