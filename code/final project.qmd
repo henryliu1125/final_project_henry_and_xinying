@@ -30,8 +30,6 @@ warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
 alt.data_transformers.disable_max_rows()
 
-data_path = 'data/external'
-
 # improve graph Resolution
 import tempfile
 from IPython.display import SVG, display, Image
@@ -63,7 +61,7 @@ def display_altair_png(chart, scale=2):
 
 ```{python}
 # Set data path
-DATA_DIR = Path("../data/derived-data")
+DATA_DIR = Path("../data")
 
 # Crime
 crime_raw = pd.read_csv(DATA_DIR / "Crimes_-_2001_to_Present_20260304.csv")
@@ -164,6 +162,9 @@ def classify_crime(x):
 crime["crime_type"] = crime["Primary Type"].apply(classify_crime)
 
 crime = crime.drop(columns="Primary Type")
+
+print("Crime cleaned:", crime.shape)
+display(crime.head())
 ```
 
 ### Cleaning education data
@@ -208,7 +209,7 @@ edu["edu_rate"] = 100 * edu["bachelor_plus"] / edu["B15003_001E"]
 edu = edu[["tract_id", "edu_rate"]]
 
 print("Education cleaned:", edu.shape)
-display("Education table:", edu.head())
+display(edu.head())
 ```
 
 ### Cleaning unemployment data
@@ -241,7 +242,7 @@ unemp = unemp[[
 ]]
 
 print("Unemployment cleaned:", unemp.shape)
-display("Unemployment table:", unemp.head())
+display(unemp.head())
 ```
 
 ### Cleaning income data
@@ -274,7 +275,7 @@ income = income[[
 ]]
 
 print("Income cleaned:", income.shape)
-display("Income table:", income.head())
+display(income.head())
 ```
 
 ### Cleaning population data
@@ -307,7 +308,7 @@ pop = pop[[
 ]]
 
 print("Population cleaned:", pop.shape)
-display("Population table:", pop.head())
+display(pop.head())
 ```
 
 ## Subset data for only Chicago tracts
@@ -364,7 +365,7 @@ crime_tract = gpd.sjoin(
 
 crime_tract["tract_id"] = crime_tract["tract_id"].astype(str).str.zfill(11)
 
-print(crime_tract.shape)
+print("Crime in Chicago: ", crime_tract.shape)
 display(crime_tract.head())
 ```
 
@@ -472,8 +473,7 @@ crime_calendar = (
 
 # Month labels
 month_order = [
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
+    "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
 ]
 
 crime_calendar["month_name"] = crime_calendar["month"].apply(lambda x: month_order[x-1])
@@ -517,11 +517,6 @@ calendar_heatmap
 
 ```{python}
 # Static plot 2: Crime count by Month and Hour
-
-crime_time = crime_tract.copy()
-crime_time["Date"] = pd.to_datetime(crime_time["Date"], errors="coerce")
-
-crime_time["month"] = crime_time["Date"].dt.month
 crime_time["hour"] = crime_time["Date"].dt.hour
 
 # Aggregate counts
@@ -533,9 +528,6 @@ crime_month_hour = (
 )
 
 # Month labels
-month_order = ["Jan","Feb","Mar","Apr","May","Jun",
-               "Jul","Aug","Sep","Oct","Nov","Dec"]
-
 crime_month_hour["month_name"] = crime_month_hour["month"].apply(lambda x: month_order[x-1])
 
 # Heatmap
@@ -566,6 +558,249 @@ crime_hour_heatmap = (
 crime_hour_heatmap
 ```
 
+```{python}
+crime_time = crime_tract.copy()
+crime_time["Date"] = pd.to_datetime(crime_time["Date"], errors="coerce")
+crime_time["month"] = crime_time["Date"].dt.month
+crime_time["date"] = crime_time["Date"].dt.day
+crime_time["hour"] = crime_time["Date"].dt.hour
+crime_time["minute"] = crime_time["Date"].dt.minute
+
+# 检查1号数据里，时间是否集中在整点/特定时间
+day1 = crime_time[crime_time["date"] == 1]
+print("1号数据中各小时分布：")
+print(day1["hour"].value_counts().sort_index())
+
+# 检查12:00 AM和12:00 PM的分钟数分布
+hour0_12 = crime_time[crime_time["hour"].isin([0, 12])]
+print("\n0点和12点的分钟数分布：")
+print(hour0_12["minute"].value_counts().sort_index())
+# 如果分钟数集中在0，说明是默认填入的整点
+
+# 检查5月14日前后数据
+may = crime_time[crime_time["month"] == 5]
+may_by_date = may.groupby("date").size()
+print("5月各日期犯罪数量：")
+print(may_by_date)
+
+# 检查5月14日的具体数据
+may14 = crime_time[(crime_time["month"] == 5) & (crime_time["date"] == 14)]
+print(f"\n5月14日总案件数: {len(may14)}")
+print("5月14日各小时分布：")
+print(may14["hour"].value_counts().sort_index())
+print(crime_time["Date"].max())  # 看数据的最后一条记录是什么时间
+
+# 对比1月14日各类型犯罪和前后几天
+jan = crime_time[crime_time["month"] == 1]
+jan_type = jan.groupby(["date", "crime_type"]).size().unstack(fill_value=0)
+print(jan_type.loc[12:16])  # 看12-16号
+
+# 第一步：在原始crime_raw里看5月14日有多少条
+crime_raw_check = crime_raw.copy()
+crime_raw_check["Date"] = pd.to_datetime(crime_raw_check["Date"], errors="coerce")
+may14_raw = crime_raw_check[
+    (crime_raw_check["Date"].dt.month == 5) & 
+    (crime_raw_check["Date"].dt.day == 14)
+]
+print(f"原始数据中5月14日: {len(may14_raw)} 条")
+
+# 第二步：在dropna(Latitude/Longitude)之后看
+may14_geo = may14_raw.dropna(subset=["Latitude", "Longitude"])
+print(f"去掉缺失坐标后5月14日: {len(may14_geo)} 条")
+
+# 第三步：在spatial join之后看（即crime_tract里）
+may14_tract = crime_tract[
+    (pd.to_datetime(crime_tract["Date"], errors="coerce").dt.month == 5) &
+    (pd.to_datetime(crime_tract["Date"], errors="coerce").dt.day == 14)
+]
+print(f"spatial join后5月14日: {len(may14_tract)} 条")
+
+# 检查每天缺失坐标的比例，看5月14日是否异常
+crime_raw_check["Date"] = pd.to_datetime(crime_raw_check["Date"], errors="coerce")
+crime_raw_check["month"] = crime_raw_check["Date"].dt.month
+crime_raw_check["date"] = crime_raw_check["Date"].dt.day
+crime_raw_check["has_coords"] = crime_raw_check["Latitude"].notna()
+
+# 5月各日期的坐标缺失率
+may_missing = crime_raw_check[crime_raw_check["month"] == 5].groupby("date")["has_coords"].mean()
+print("5月各日期坐标完整率：")
+print(may_missing)
+
+# 整体缺失率对比
+overall_missing = crime_raw_check["has_coords"].mean()
+print(f"\n全年整体坐标完整率: {overall_missing:.2%}")
+print(f"5月14日坐标完整率: {116/728:.2%}")
+
+# 取出5月14日缺失坐标的案件
+may14_missing = crime_raw_check[
+    (crime_raw_check["month"] == 5) & 
+    (crime_raw_check["date"] == 14) & 
+    (~crime_raw_check["has_coords"])
+]
+
+print(f"5月14日缺失坐标案件总数: {len(may14_missing)}")
+
+# 案件类型分布
+print("\n案件类型分布（Primary Type）:")
+print(may14_missing["Primary Type"].value_counts().head(20))
+
+# 时间分布
+print("\n小时分布:")
+print(may14_missing["Date"].dt.hour.value_counts().sort_index())
+
+# 如果原始数据有Description列
+if "Description" in may14_missing.columns:
+    print("\n案件描述分布（Description）:")
+    print(may14_missing["Description"].value_counts().head(20))
+
+# 如果有Block列，看地址是否集中
+if "Block" in may14_missing.columns:
+    print("\n地址分布（Block，前20）:")
+    print(may14_missing["Block"].value_counts().head(20))
+
+# 看几条原始记录
+print("\n原始数据样本（前5条）:")
+print(may14_missing.head())
+
+# 检查1月各日期坐标完整率
+jan_missing = crime_raw_check[crime_raw_check["month"] == 1].groupby("date")["has_coords"].mean()
+print("1月各日期坐标完整率：")
+print(jan_missing)
+
+jan14_total = crime_raw_check[
+    (crime_raw_check["month"] == 1) & 
+    (crime_raw_check["date"] == 14)
+]
+print(f"\n1月14日原始数据总条数: {len(jan14_total)}")
+print(f"1月14日坐标完整率: {jan14_total['has_coords'].mean():.2%}")
+
+# 所有日期坐标完整率，找出最低的前5
+all_missing = crime_raw_check.groupby(
+    ["month", "date"]
+)["has_coords"].mean().reset_index()
+all_missing.columns = ["month", "date", "completeness_rate"]
+all_missing = all_missing.sort_values("completeness_rate")
+print("坐标完整率最低的前5个日期：")
+print(all_missing.head())
+
+
+crime_raw_check["Date"] = pd.to_datetime(crime_raw_check["Date"], errors="coerce")
+crime_raw_check["month"] = crime_raw_check["Date"].dt.month
+crime_raw_check["date"] = crime_raw_check["Date"].dt.day
+crime_raw_check["hour"] = crime_raw_check["Date"].dt.hour
+crime_raw_check["minute"] = crime_raw_check["Date"].dt.minute
+crime_raw_check["second"] = crime_raw_check["Date"].dt.second
+crime_raw_check["has_coords"] = crime_raw_check["Latitude"].notna()
+
+def midnight_rate(df):
+    midnight = (df["hour"] == 0) & (df["minute"] == 0) & (df["second"] == 0)
+    return midnight.mean()
+
+day1 = crime_raw_check[crime_raw_check["date"] == 1]
+other_days = crime_raw_check[crime_raw_check["date"] != 1]
+
+print(f"1号中时间为00:00:00的占比: {midnight_rate(day1):.2%}")
+print(f"其他日期中时间为00:00:00的占比: {midnight_rate(other_days):.2%}")
+
+print("\n1号的小时分布（归一化）:")
+print((day1["hour"].value_counts(normalize=True).sort_index() * 100).round(2))
+
+print("\n其他日期的小时分布（归一化）:")
+print((other_days["hour"].value_counts(normalize=True).sort_index() * 100).round(2))
+```
+
+### Investigate anormalies shown in the plots
+
+```{python}
+# Create a check dataframe
+crime_raw_check = crime_raw.copy()
+crime_raw_check["Date"] = pd.to_datetime(crime_raw_check["Date"], errors="coerce")
+crime_raw_check["month"] = crime_raw_check["Date"].dt.month
+crime_raw_check["date"] = crime_raw_check["Date"].dt.day
+crime_raw_check["hour"] = crime_raw_check["Date"].dt.hour
+crime_raw_check["minute"] = crime_raw_check["Date"].dt.minute
+crime_raw_check["second"] = crime_raw_check["Date"].dt.second
+crime_raw_check["has_coords"] = (crime_raw_check["Latitude"].notna() & crime_raw_check["Longitude"].notna())
+
+# 1. 日期异常检验
+
+# ── 1.1 联邦假日（1月14日 MLK Day & 11月28日 Thanksgiving）──
+for month, day, name in [(1, 14, "MLK Day"), (11, 28, "Thanksgiving")]:
+    raw = crime_raw_check[
+        (crime_raw_check["month"] == month) &
+        (crime_raw_check["date"] == day)
+    ]
+    # 对比前后3天的平均数量
+    surrounding = crime_raw_check[
+        (crime_raw_check["month"] == month) &
+        (crime_raw_check["date"].isin(range(day-3, day+4))) &
+        (crime_raw_check["date"] != day)
+    ]
+    avg_surrounding = len(surrounding) / 6
+    print(f"\n[1.1] {month}月{day}日 ({name})")
+    print(f"  Raw data 当天案件数:      {len(raw)}")
+    print(f"  Raw data 前后3天日均:     {avg_surrounding:.0f}")
+    print(f"  坐标完整率:               {raw['has_coords'].mean():.2%}")
+
+# ── 1.2 5月14日：坐标缺失异常 ──────────────────────────────
+print("\n[1.2] 5月14日坐标缺失分析")
+may14_raw = crime_raw_check[
+    (crime_raw_check["month"] == 5) &
+    (crime_raw_check["date"] == 14)
+]
+print(f"  Raw data 案件数:            {len(may14_raw)}")
+print(f"  坐标完整率:                 {may14_raw['has_coords'].mean():.2%}")
+print(f"  全年平均坐标完整率:         {crime_raw_check['has_coords'].mean():.2%}")
+
+# 坐标完整率最低的前5个日期
+all_completeness = (
+    crime_raw_check
+    .groupby(["month", "date"])["has_coords"]
+    .mean()
+    .reset_index()
+    .rename(columns={"has_coords": "completeness_rate"})
+    .sort_values("completeness_rate")
+)
+print("\n  坐标完整率最低的前5个日期：")
+print(all_completeness.head().to_string(index=False))
+
+# 缺失坐标案件的类型分布（确认非重复案件）
+may14_missing = may14_raw[~may14_raw["has_coords"]]
+print(f"\n  缺失坐标案件数:             {len(may14_missing)}")
+print("  缺失坐标案件类型分布：")
+print(may14_missing["Primary Type"].value_counts().head(10).to_string())
+
+# ── 1.3 每月1号：默认日期验证 ──────────────────────────────
+print("\n[1.3] 每月1号默认日期验证")
+day1       = crime_raw_check[crime_raw_check["date"] == 1]
+other_days = crime_raw_check[crime_raw_check["date"] != 1]
+
+midnight = lambda df: ((df["hour"]==0) & (df["minute"]==0) & (df["second"]==0)).mean()
+print(f"  1号   中 00:00:00 占比:     {midnight(day1):.2%}")
+print(f"  其他日 中 00:00:00 占比:    {midnight(other_days):.2%}")
+print(f"  1号   中 hour=0  占比:      {(day1['hour']==0).mean():.2%}")
+print(f"  其他日 中 hour=0  占比:     {(other_days['hour']==0).mean():.2%}")
+
+# ============================================================
+# 2. 时间异常检验
+# ============================================================
+
+# ── 2.1 0点和12点集中：默认时间验证 ───────────────────────
+print("\n[2.1] 0点和12点默认时间验证")
+h0_h12     = crime_raw_check[crime_raw_check["hour"].isin([0, 12])]
+other_hours = crime_raw_check[~crime_raw_check["hour"].isin([0, 12])]
+
+exact_zero = lambda df: ((df["minute"]==0) & (df["second"]==0)).mean()
+print(f"  0点&12点 中 整点(xx:00:00) 占比:   {exact_zero(h0_h12):.2%}")
+print(f"  其他小时 中 整点(xx:00:00) 占比:   {exact_zero(other_hours):.2%}")
+
+# 分钟数分布对比（0点&12点 vs 其他）
+print("\n  0点&12点 分钟数分布（前5分钟）：")
+print(h0_h12["minute"].value_counts().sort_index().head(5).to_string())
+print("\n  其他小时 分钟数分布（前5分钟）：")
+print(other_hours["minute"].value_counts().sort_index().head(5).to_string())
+```
+
 ## Static plot 3: Crime Count Choropleth Map
 
 ```{python}
@@ -594,8 +829,8 @@ crime_count_map = (
         ],
     )
     .properties(
-        width=400,
-        height=400,
+        width=300,
+        height=500,
         title="Chicago Crime Count by Census Tract (2024)"
     )
     .project(type="mercator")
@@ -623,7 +858,7 @@ crime_rate_map = (
     .encode(
         color=alt.Color(
             "properties.crime_rate:Q",
-            title="Crime Rate (per 100 residents)",
+            title="Crime Rate",
             scale=alt.Scale(scheme="orangered")
         ),
         tooltip=[
@@ -634,8 +869,8 @@ crime_rate_map = (
         ],
     )
     .properties(
-        width=400,
-        height=400,
+        width=300,
+        height=500,
         title="Chicago Crime Rate by Census Tract (2024)"
     )
     .project(type="mercator")
@@ -643,8 +878,6 @@ crime_rate_map = (
 
 crime_rate_map
 ```
-
-# Part 2: 
 
 ## Static plot 5: Crime Count by Type
 
@@ -684,6 +917,8 @@ crime_type_bar = (
 crime_type_bar
 ```
 
+# Part 2: Crime and Socioeconomics Relationship
+
 ## Static plot 6: Choropleths for Education Rate
 
 ```{python}
@@ -700,7 +935,7 @@ base = (
     )
     .mark_geoshape(stroke="white", strokeWidth=0.2)
     .project(type="mercator")
-    .properties(width=450, height=450)
+    .properties(width=350, height=450)
 )
 ```
 ```{python}
