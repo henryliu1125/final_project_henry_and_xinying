@@ -10,7 +10,7 @@ format:
         \usepackage{float}
         \usepackage{booktabs}
         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
-        \usepackage[bottom=1cm]{geometry}
+        \usepackage[bottom=1.5cm]{geometry}
 execute:
   echo: false
   warning: false
