@@ -46,7 +46,7 @@ def classify_crime(x):
 
 
 # Data loaders (cached)
-DATA_DIR = Path("data/derived-data")
+DATA_DIR = Path("data")
 
 @st.cache_data(show_spinner="Loading crime data...")
 def load_crime():
