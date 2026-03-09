@@ -1,37 +1,46 @@
-# Fire Perimeter Analysis
+# Chicago Crime Patterns and Socioeconomic Correlates
+Group 42 — Xinying Jiang & Henry Liu
 
-This project processes and visualizes historical fire perimeter data and Canadian CPI data.
+## Streamlit App
+Access the interactive dashboard here:
+[https://henryandxinying-t4ojwtdhvmqnjkozmh5jne.streamlit.app](https://henryandxinying-t4ojwtdhvmqnjkozmh5jne.streamlit.app)
+
+> **Note:** Streamlit apps need to be "woken up" if they have not been run in the last 24 hours. If you see a sleeping screen, click "Wake up" and wait ~30 seconds.
 
 ## Setup
-
 ```bash
-conda env create -f environment.yml
-conda activate fire_analysis
+pip install -r requirements.txt
 ```
+
+## Data Sources
+- **Crime data**: Downloaded from the [Chicago Data Portal](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2), with a filter Year=2024 in the dashboard.
+- **ACS data**: Downloaded from [Census ACS 5-Year Estimates 2024](https://data.census.gov) (tables B15003, S2301, B19013, B01003).
+- **Shapefiles**: Illinois census tracts from [Census TIGER/Line 2023](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) and Chicago city boundary from the [Chicago Data Portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City-Map/ewy2-6yfk).
 
 ## Project Structure
-
 ```
 data/
-  raw-data/           # Raw data files
-    fire.csv          # Historical fire perimeter data
-    canadian_cpi.csv  # Canadian Consumer Price Index data
-  derived-data/       # Filtered data and output plots
-    fire_filtered.gpkg  # Fire data filtered to post-2015
-    cpi_filtered.csv    # CPI data filtered to 2020 onwards
+  Crimes_-_2001_to_Present_20260304.csv  # Crime incidents filtered to 2024
+  ACSDT5Y2024.B15003-Data.csv            # Educational attainment by tract
+  ACSST5Y2024.S2301-Data.csv             # Unemployment rate by tract
+  ACSDT5Y2024.B19013-Data.csv            # Median household income by tract
+  ACSDT5Y2024.B01003-Data.csv            # Total population by tract
+  tl_2023_17_tract/                      # Illinois census tract shapefile
+  Boundaries - City_20260303/            # Chicago city boundary shapefile
 code/
-  preprocessing.py    # Filters fire and CPI data
-  plot_fires.py       # Plots fire perimeters
+  app.py                                 # Streamlit dashboard
+  final project.qmd                      # Writeup .qmd file
+  final project.html                     # Writeup Knitted to HTML
+  final-project.pdf                      # Writeup Knitted to PDF
 ```
 
 ## Usage
-
-1. Run preprocessing to filter data:
-   ```bash
-   python code/preprocessing.py
-   ```
-
-2. Generate the fire perimeter plot:
-   ```bash
-   python code/plot_fires.py
-   ```
+1. Run the Streamlit app locally:
+```bash
+   streamlit run code/app.py
+```
+2. Render the writeup:
+```bash
+   quarto render "code/final project.qmd" --to html
+   quarto render "code/final project.qmd" --to pdf
+```
